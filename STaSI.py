@@ -8,6 +8,68 @@ DOI: 10.1021/jz501435p
 from algorithms.HaarWavelet import w1, sdevFromW1
 import numpy as np
 from itertools import combinations
+import pandas as pd
+
+def fitSTaSIModel(data):
+    '''fits the STaSI model to the data
+    
+    Args:
+        data (np.array): the time series
+    Returns:
+        (fit (np.array), results (pd.DataFrame)): 
+                                        fit: best fit to the data
+                                        results: table of identified constant segments, their beginning and end indices, their assigned states, and their assigned mean values.
+    '''
+    segindices = segmentizeData(data)
+    states = makeStates(data, segindices)
+    means = getMeansOfStates(data, segindices, states)
+    fits = getFitFunctions(segindices, states, means)
+    MDLs = MDL(data, fits, segindices, states)
+    best_fit = np.argmin(MDLs)
+
+    numstates_best = np.max(states[best_fit])
+    print('**********************************************')
+    print('Found ' + str(numstates_best) + ' states')
+    print('Means: ' + str(means[best_fit]))
+    return fits[best_fit], _segsAndMeans(segindices, states[best_fit], means[best_fit])
+
+def _segsAndMeans(segmentindices, states_one_pooling_level, means_one_pooling_level):
+    '''return a list of segments with start and end indices, their states, and their means
+    
+    Args:
+        segmentindices (np.array): array of end-of-segment indices.
+        states_one_pooling_level (list of int): assignment of each segment to a state. Must have the same length of len(segmentindices)-1. (The first value of segmentindices is 0)
+                                For example, states=[1,1,1,2,2] assigns the first three segments to state 1 and the last 2 segments to state 2
+                                Numbering of states starts at 1 (not at zero!).
+        means_one_pooling_level (np.array of float): mean value of the data in each one of the states. (for one level of pooling only; this is a 1D array)
+    '''
+    statediff = np.diff(np.asarray(states_one_pooling_level))
+
+    starts = [0]
+    stops = []
+    means = []
+    states = []
+
+
+    for stop, state, diff in zip(segmentindices[1:-1], states_one_pooling_level[:-1], statediff):
+        if diff is not 0: #if diff is 0, then we want to ignore the current end index as we are remaining in the same state.
+            stops.append(stop)
+            starts.append(stop) #the current stop is the beginning of the next segment
+            states.append(state)
+            means.append(means_one_pooling_level[state-1])
+
+    #now append info about the last segment
+    stops.append(segmentindices[-1])
+    states.append(states_one_pooling_level[-1])
+    means.append(means_one_pooling_level[states[-1]-1])
+
+    results = pd.DataFrame({'start': starts, 'stop': stops, 'mean': means, 'state': states})
+
+    return results
+
+
+
+
 
 def segmentizeData(data):
     '''detect transition points and segmentize the data until termination conditions are met.
@@ -19,7 +81,7 @@ def segmentizeData(data):
     '''
 
     N = len(data)
-
+    print('dataset has length N: ' + str(N))
     segmentindices = np.array([0, N]) #segments are defined as running up to (and not including) their end indices
     donesegs = np.array([False])
     done = False
@@ -29,17 +91,29 @@ def segmentizeData(data):
         for start, end, status in zip(segmentindices[0:-1], segmentindices[1:], donesegs):
             if status == False: #we need to process this segment
                 print('processing segment from ' + str(start) + ' to ' + str(end))
-                tpnts = _findTransitionPoint(data[start:end])
-                if tpnts is None:
-                    #we are done with this segment
-                    segnew.append(end)
-                    donenew.append(True)
+                if(end - start <3):
+                    #this segment contains nothing. do nothing with it.
+                    #segnew.append(end)
+                    #donenew.append(True)
+                    pass
                 else:
-                    #found a new transition point, split this segment
-                    segnew.append(start+tpnts)
-                    segnew.append(end)
-                    donenew.append(False)
-                    donenew.append(False)
+                    tpnts = _findTransitionPoint(data[start:end])
+                    if tpnts is None:
+                        #we are done with this segment
+                        segnew.append(end)
+                        donenew.append(True)
+                    else:
+                        #found a new transition point, split this segment
+                        if(start+tpnts == end or start+tpnts == start):
+                            #we are done
+                            segnew.append(end)
+                            donenew.append(True)
+                        else:
+                            segnew.append(start+tpnts)
+                            segnew.append(end)
+                            donenew.append(False)
+                            donenew.append(False)
+                            #print('not done at: ' + str(start) + ' to ' + str(end) + ', inserted: ' + str(start+tpnts))
             else: 
                 #this segment has already been processed and found not to contain any more transitions points. add it to our list
                 segnew.append(end)
@@ -65,13 +139,13 @@ def makeStates(data, segmentindices):
     states = np.arange(numsegs-1)+1 #        states (list of int): assignment of each segment to a state. Must have the same length of len(segmentindices)-1. (The first value of segmentindices is 0)
                                   #For example, states=[1,1,1,2,2] assigns the first three segments to state 1 and the last 2 segments to state 2
                                   #Numbering of states starts at 1 (not at zero!).
-    print('we start out with the following states: ' + str(states))
+    #print('we start out with the following states: ' + str(states))
     pooled_states = [list(states)]
     while (max(states)>1):
         new_states = _combineTwoStates(data, segmentindices, states)
         pooled_states.append(list(new_states))
         states = new_states
-        print('new states: ' + str(new_states))
+        #print('new states: ' + str(new_states))
     return pooled_states
 
 def getMeansOfStates(data, segmentindices, pooled_states):
@@ -86,7 +160,7 @@ def getMeansOfStates(data, segmentindices, pooled_states):
     '''
     means = []
     for i, states in enumerate(pooled_states):
-        print('in pool: ' + str(i))
+        #print('in pool: ' + str(i))
         means_in_pool = []
         statedata = _concatenateStateData(data, states, segmentindices)
         for statenum, sdata in enumerate(statedata):
@@ -160,7 +234,7 @@ def _G(data, fit_functions, sigma, segmentindices, pooled_states):
         for state, start, end in zip(states, segmentindices[0:-1], segmentindices[1:]):
             ni[state-1] = ni[state-1] + (end - start)
         
-        print('n_i: ' + str(ni))
+        #print('n_i: ' + str(ni))
 
         #get the T_j, the difference of the fitting values before and after the transition position j
         T_j = []
@@ -217,7 +291,7 @@ def _combineTwoStates(data, segmentindices, states):
         merits.append(merit)
     
     maxmerit_index = np.argmax(np.asarray(merits))
-    print('combining states ' + str(state_pairs[maxmerit_index]))
+    #print('combining states ' + str(state_pairs[maxmerit_index]))
 
     states = np.asarray(states)
     newstates = np.copy(states)
@@ -278,10 +352,11 @@ def _findTransitionPoint(data, threshold = 3.174):
     '''
     w1s = w1(data)
     sigma = sdevFromW1(w1s)
+    #print('sigma: ' + str(sigma))
     Rs = np.copy(data)
     Rs.fill(0)
 
-    for i, _ in enumerate(data):
+    for i, _ in enumerate(data[:-1]):
         Rs[i] = _tTest(data, i, sigma)
     
     index = np.nanargmax(Rs)
@@ -304,4 +379,13 @@ def _tTest(data, i, sigma):
     '''
     N = len(data)
     R = np.abs(np.mean(data[i+1:]) - np.mean(data[:i+1])) / (sigma * np.sqrt(1/(i+1) + 1/(N-i+1)))
+    if (np.isnan(R)):
+        print('data: ' + str(data))
+        print('i : ' + str(i))
+        print('sigma: ' + str(sigma))
+        print('denom: ' + str(sigma * np.sqrt(1/(i+1) + 1/(N-i+1))))
+        print('enum: ' + str(np.abs(np.mean(data[i+1:]) - np.mean(data[:i+1]))))
+        print('N: ' + str(N))
+        print('enum1: ' + str(np.mean(data[i+1:])))
+        print('enum2: ' + str(np.mean(data[:i+1])))
     return R
