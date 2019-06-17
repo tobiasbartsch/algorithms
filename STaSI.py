@@ -5,10 +5,14 @@ The Journal of Physical Chemistry Letters 2014 5 (18), 3157-3161
 DOI: 10.1021/jz501435p
 '''
 
-from algorithms.HaarWavelet import w1, sdevFromW1
 import numpy as np
 from itertools import combinations
 import pandas as pd
+
+from algorithms.HaarWavelet import w1, sdevFromW1
+
+__author__ = "Tobias Bartsch"
+__email__ = "tobias-bartsch@gmx.net"
 
 def fitSTaSIModel(data):
     '''fits the STaSI model to the data
@@ -16,9 +20,10 @@ def fitSTaSIModel(data):
     Args:
         data (np.array): the time series
     Returns:
-        (fit (np.array), results (pd.DataFrame)): 
+        (fit (np.array), results (pd.DataFrame), MDLs): 
                                         fit: best fit to the data
                                         results: table of identified constant segments, their beginning and end indices, their assigned states, and their assigned mean values.
+                                        MDLs: np.array of mean description lengths as function of identified states. Minimizing this function is the fitting objective. Inspect this to make sure there is a well-defined minimum.
     '''
     segindices = segmentizeData(data)
     states = makeStates(data, segindices)
@@ -31,7 +36,7 @@ def fitSTaSIModel(data):
     print('**********************************************')
     print('Found ' + str(numstates_best) + ' states')
     print('Means: ' + str(means[best_fit]))
-    return fits[best_fit], _segsAndMeans(segindices, states[best_fit], means[best_fit])
+    return fits[best_fit], _segsAndMeans(segindices, states[best_fit], means[best_fit]), np.asarray(MDLs)
 
 def _segsAndMeans(segmentindices, states_one_pooling_level, means_one_pooling_level):
     '''return a list of segments with start and end indices, their states, and their means
@@ -81,7 +86,6 @@ def segmentizeData(data):
     '''
 
     N = len(data)
-    print('dataset has length N: ' + str(N))
     segmentindices = np.array([0, N]) #segments are defined as running up to (and not including) their end indices
     donesegs = np.array([False])
     done = False
@@ -90,7 +94,6 @@ def segmentizeData(data):
         donenew = []
         for start, end, status in zip(segmentindices[0:-1], segmentindices[1:], donesegs):
             if status == False: #we need to process this segment
-                print('processing segment from ' + str(start) + ' to ' + str(end))
                 if(end - start <3):
                     #this segment contains nothing. do nothing with it.
                     #segnew.append(end)
@@ -113,7 +116,6 @@ def segmentizeData(data):
                             segnew.append(end)
                             donenew.append(False)
                             donenew.append(False)
-                            #print('not done at: ' + str(start) + ' to ' + str(end) + ', inserted: ' + str(start+tpnts))
             else: 
                 #this segment has already been processed and found not to contain any more transitions points. add it to our list
                 segnew.append(end)
@@ -139,13 +141,11 @@ def makeStates(data, segmentindices):
     states = np.arange(numsegs-1)+1 #        states (list of int): assignment of each segment to a state. Must have the same length of len(segmentindices)-1. (The first value of segmentindices is 0)
                                   #For example, states=[1,1,1,2,2] assigns the first three segments to state 1 and the last 2 segments to state 2
                                   #Numbering of states starts at 1 (not at zero!).
-    #print('we start out with the following states: ' + str(states))
     pooled_states = [list(states)]
     while (max(states)>1):
         new_states = _combineTwoStates(data, segmentindices, states)
         pooled_states.append(list(new_states))
         states = new_states
-        #print('new states: ' + str(new_states))
     return pooled_states
 
 def getMeansOfStates(data, segmentindices, pooled_states):
@@ -160,7 +160,6 @@ def getMeansOfStates(data, segmentindices, pooled_states):
     '''
     means = []
     for i, states in enumerate(pooled_states):
-        #print('in pool: ' + str(i))
         means_in_pool = []
         statedata = _concatenateStateData(data, states, segmentindices)
         for statenum, sdata in enumerate(statedata):
@@ -234,8 +233,6 @@ def _G(data, fit_functions, sigma, segmentindices, pooled_states):
         for state, start, end in zip(states, segmentindices[0:-1], segmentindices[1:]):
             ni[state-1] = ni[state-1] + (end - start)
         
-        #print('n_i: ' + str(ni))
-
         #get the T_j, the difference of the fitting values before and after the transition position j
         T_j = []
         for trans_pos in segmentindices[1:-1]:
@@ -291,7 +288,6 @@ def _combineTwoStates(data, segmentindices, states):
         merits.append(merit)
     
     maxmerit_index = np.argmax(np.asarray(merits))
-    #print('combining states ' + str(state_pairs[maxmerit_index]))
 
     states = np.asarray(states)
     newstates = np.copy(states)
@@ -352,7 +348,6 @@ def _findTransitionPoint(data, threshold = 3.174):
     '''
     w1s = w1(data)
     sigma = sdevFromW1(w1s)
-    #print('sigma: ' + str(sigma))
     Rs = np.copy(data)
     Rs.fill(0)
 
@@ -379,13 +374,4 @@ def _tTest(data, i, sigma):
     '''
     N = len(data)
     R = np.abs(np.mean(data[i+1:]) - np.mean(data[:i+1])) / (sigma * np.sqrt(1/(i+1) + 1/(N-i+1)))
-    if (np.isnan(R)):
-        print('data: ' + str(data))
-        print('i : ' + str(i))
-        print('sigma: ' + str(sigma))
-        print('denom: ' + str(sigma * np.sqrt(1/(i+1) + 1/(N-i+1))))
-        print('enum: ' + str(np.abs(np.mean(data[i+1:]) - np.mean(data[:i+1]))))
-        print('N: ' + str(N))
-        print('enum1: ' + str(np.mean(data[i+1:])))
-        print('enum2: ' + str(np.mean(data[:i+1])))
     return R
