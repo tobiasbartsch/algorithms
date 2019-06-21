@@ -86,7 +86,7 @@ def segmentizeData(data):
     '''
 
     N = len(data)
-    segmentindices = np.array([0, N]) #segments are defined as running up to (and not including) their end indices
+    segmentindices = np.array([0, N-1]) #segments are defined as running up to (and not including) their end indices
     donesegs = np.array([False])
     done = False
     while (done == False): # are not yet done segmentizing
@@ -183,7 +183,7 @@ def getFitFunctions(segmentindices, pooled_states, means):
 
     for statemeans, states in zip(means, pooled_states):
         #The last value in segmentindices is the total length of the data series
-        fitfunc = np.zeros(np.max(segmentindices))
+        fitfunc = np.zeros(np.max(segmentindices)+1)
         for start_index, end_index, state in zip(segmentindices[:-1], segmentindices[1:], states):
             fitfunc[start_index:end_index].fill(statemeans[state-1])
         fit_functions.append(fitfunc)
