@@ -28,7 +28,7 @@ def fitSTaSIModel(data):
     segindices = segmentizeData(data)
     states = makeStates(data, segindices)
     means = getMeansOfStates(data, segindices, states)
-    fits = getFitFunctions(segindices, states, means)
+    fits = getFitFunctions(segindices, states, means)            
     MDLs = MDL(data, fits, segindices, states)
     best_fit = np.argmin(MDLs)
 
@@ -96,9 +96,9 @@ def segmentizeData(data):
             if status == False: #we need to process this segment
                 if(end - start <3):
                     #this segment contains nothing. do nothing with it.
-                    #segnew.append(end)
-                    #donenew.append(True)
-                    pass
+                    segnew.append(end)
+                    donenew.append(True)
+                    #pass
                 else:
                     tpnts = _findTransitionPoint(data[start:end])
                     if tpnts is None:
@@ -185,7 +185,7 @@ def getFitFunctions(segmentindices, pooled_states, means):
         #The last value in segmentindices is the total length of the data series
         fitfunc = np.zeros(np.max(segmentindices)+1)
         for start_index, end_index, state in zip(segmentindices[:-1], segmentindices[1:], states):
-            fitfunc[start_index:end_index].fill(statemeans[state-1])
+            fitfunc[start_index:end_index+1].fill(statemeans[state-1])
         fit_functions.append(fitfunc)
     
     return fit_functions
