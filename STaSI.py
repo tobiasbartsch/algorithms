@@ -353,6 +353,7 @@ def _findTransitionPoint(data, threshold = 3.174):
 
     for i, _ in enumerate(data[:-1]):
         Rs[i] = _tTest(data, i, sigma)
+
     
     index = np.nanargmax(Rs)
     if(Rs[index] > threshold):
@@ -373,5 +374,8 @@ def _tTest(data, i, sigma):
         R (float): t-test value (transition point for R > 3.174)
     '''
     N = len(data)
-    R = np.abs(np.mean(data[i+1:]) - np.mean(data[:i+1])) / (sigma * np.sqrt(1/(i+1) + 1/(N-i+1)))
+    if(sigma > 0):
+        R = np.abs(np.mean(data[i+1:]) - np.mean(data[:i+1])) / (sigma * np.sqrt(1/(i+1) + 1/(N-i+1)))
+    else:
+        R=0
     return R
