@@ -20,8 +20,9 @@ def fitSTaSIModel(data):
     Args:
         data (np.array): the time series
     Returns:
-        (fit (np.array), results (pd.DataFrame), MDLs): 
+        (fit (np.array), means (list), results (pd.DataFrame), MDLs): 
                                         fit: best fit to the data
+                                        means: means of the states in the best-fitting model.
                                         results: table of identified constant segments, their beginning and end indices, their assigned states, and their assigned mean values.
                                         MDLs: np.array of mean description lengths as function of identified states. Minimizing this function is the fitting objective. Inspect this to make sure there is a well-defined minimum.
     '''
@@ -36,7 +37,7 @@ def fitSTaSIModel(data):
     print('**********************************************')
     print('Found ' + str(numstates_best) + ' states')
     print('Means: ' + str(means[best_fit]))
-    return fits[best_fit], _segsAndMeans(segindices, states[best_fit], means[best_fit]), np.asarray(MDLs)
+    return fits[best_fit], means[best_fit], _segsAndMeans(segindices, states[best_fit], means[best_fit]), np.asarray(MDLs)
 
 def _segsAndMeans(segmentindices, states_one_pooling_level, means_one_pooling_level):
     '''return a list of segments with start and end indices, their states, and their means
