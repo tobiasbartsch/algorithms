@@ -26,6 +26,9 @@ def fitSTaSIModel(data):
                                         results: table of identified constant segments, their beginning and end indices, their assigned states, and their assigned mean values.
                                         MDLs: np.array of mean description lengths as function of identified states. Minimizing this function is the fitting objective. Inspect this to make sure there is a well-defined minimum.
     '''
+    if len(data) == 0:
+        return np.nan, np.nan, np.nan, np.nan
+
     segindices = segmentizeData(data)
     states = makeStates(data, segindices)
     means = getMeansOfStates(data, segindices, states)
